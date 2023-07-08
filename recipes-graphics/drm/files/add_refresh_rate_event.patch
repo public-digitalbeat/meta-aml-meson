@@ -1,0 +1,158 @@
+Date: Mon 21 Jun 12:17:22 BST 2021
+From: Ao Xu <ao.xu@amlogic.com>
+Subject: [PATCH] drm: add refresh rate event notify [1/1]
+Source: Sky
+License: CLOSED
+Upstream-Status: Pending
+Signed-off-by: Ao Xu <ao.xu@amlogic.com>
+---
+
+diff --git a/xf86drm.c b/xf86drm.c
+index b7d5865..872a655 100644
+--- a/xf86drm.c
++++ b/xf86drm.c
+@@ -110,6 +110,7 @@ struct drm_pciinfo {
+ #define DRM_MSG_VERBOSITY 3
+ 
+ #define memclear(s) memset(&s, 0, sizeof(s))
++#define U642VOID(x) ((void *)(unsigned long)(x))
+ 
+ static drmServerInfoPtr drm_server_info;
+ 
+@@ -4271,3 +4272,95 @@ drm_public int drmSyncobjTransfer(int fd,
+ 
+     return ret;
+ }
++
++static void meson_handle_rr(int fd, struct drm_event *e, void *ctx)
++{
++    struct drm_meson_rr_event *rr_event;
++    struct drmMesonEventContext *ectx = ctx;
++
++    switch (e->type) {
++        case DRM_MESON_RR_CHANGING_EVENT:
++            rr_event = (struct drm_meson_rr_event *)e;
++            ectx->rr_changing_event_handler(fd, rr_event->tv_sec,
++                  rr_event->tv_usec, U642VOID(rr_event->user_data));
++            break;
++        case DRM_MESON_RR_CHANGED_EVENT:
++            rr_event = (struct drm_meson_rr_event *)e;
++            ectx->rr_changed_event_handler(fd, rr_event->tv_sec,
++                  rr_event->tv_usec, U642VOID(rr_event->user_data));
++            break;
++        default:
++            break;
++    }
++}
++
++drm_public int drmMesonHandleEvent(int fd, struct drmMesonEventContext *ctx)
++{
++    char buffer[1024];
++    int len, i;
++    struct drm_event *e;
++    struct drm_event_vblank *vblank;
++    struct drm_event_crtc_sequence *seq;
++    void *user_data;
++    drmEventContextPtr evctx = &ctx->base;
++
++    /* The DRM read semantics guarantees that we always get only
++     * complete events. */
++
++    len = read(fd, buffer, sizeof buffer);
++    if (len == 0)
++        return 0;
++    if (len < (int)sizeof *e)
++        return -1;
++
++    i = 0;
++    while (i < len) {
++	    e = (struct drm_event *)(buffer + i);
++        switch (e->type) {
++            case DRM_EVENT_VBLANK:
++                if (evctx->version < 1 ||
++                    evctx->vblank_handler == NULL)
++                    break;
++                vblank = (struct drm_event_vblank *) e;
++                evctx->vblank_handler(fd,
++                                      vblank->sequence,
++                                      vblank->tv_sec,
++                                      vblank->tv_usec,
++                               U642VOID (vblank->user_data));
++                break;
++            case DRM_EVENT_FLIP_COMPLETE:
++                vblank = (struct drm_event_vblank *) e;
++                user_data = U642VOID (vblank->user_data);
++
++                if (evctx->version >= 3 && evctx->page_flip_handler2)
++                    evctx->page_flip_handler2(fd,
++                                              vblank->sequence,
++                                              vblank->tv_sec,
++                                              vblank->tv_usec,
++                                              vblank->crtc_id,
++                                              user_data);
++		else if (evctx->version >= 2 && evctx->page_flip_handler)
++                    evctx->page_flip_handler(fd,
++                                             vblank->sequence,
++                                             vblank->tv_sec,
++                                             vblank->tv_usec,
++                                             user_data);
++                break;
++            case DRM_EVENT_CRTC_SEQUENCE:
++                seq = (struct drm_event_crtc_sequence *) e;
++                if (evctx->version >= 4 && evctx->sequence_handler)
++                    evctx->sequence_handler(fd,
++                                            seq->sequence,
++                                            seq->time_ns,
++                                            seq->user_data);
++                break;
++            default:
++                meson_handle_rr(fd, e, evctx);
++                break;
++        }
++        i += e->length;
++    }
++
++    return 0;
++}
++
+diff --git a/xf86drm.h b/xf86drm.h
+index 3f52cd8..461f37a 100644
+--- a/xf86drm.h
++++ b/xf86drm.h
+@@ -901,6 +901,36 @@ extern int drmSyncobjTransfer(int fd,
+ 			      uint32_t src_handle, uint64_t src_point,
+ 			      uint32_t flags);
+ 
++/*Event related.*/
++#define DRM_MESON_RR_REQ_CHANGING 0X1
++#define DRM_MESON_RR_REV_CHANGING 0x2
++#define DRM_MESON_RR_REQ_CHANGED 0x4
++#define DRM_MESON_RR_REV_CHANGED 0x8
++
++struct drm_meson_rr_para {
++        __u32 flags;
++};
++
++#define DRM_IOCTL_MESON_REG_RR_EVENT            DRM_IOWR(DRM_COMMAND_BASE + \
++                0X20, struct drm_meson_rr_para)
++
++struct drmMesonEventContext {
++        drmEventContext base;
++        void (*rr_changing_event_handler)(int fd, unsigned int tv_sec, unsigned int tv_usec, void *user_data);
++        void (*rr_changed_event_handler)(int fd, unsigned int tv_sec, unsigned int tv_usec, void *user_data);
++};
++
++#define DRM_MESON_RR_CHANGING_EVENT 0X10000
++#define DRM_MESON_RR_CHANGED_EVENT 0x20000
++
++struct drm_meson_rr_event {
++        struct drm_event base;
++        __u64 user_data;
++        __u32 tv_sec;
++        __u32 tv_usec;
++};
++
++int drmMesonHandleEvent(int fd, struct drmMesonEventContext *ctx);
+ #if defined(__cplusplus)
+ }
+ #endif

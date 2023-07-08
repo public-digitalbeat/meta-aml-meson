@@ -1,0 +1,30 @@
+From ccdb98ce0770c746ddc0e5810f952006fe33f141 Mon Sep 17 00:00:00 2001
+From: "fei.deng" <fei.deng@amlogic.com>
+Date: Wed, 12 Oct 2022 10:20:58 +0800
+Subject: [PATCH] start xrun  after got the firat data
+
+Change-Id: Ia30e4d9eb0d33fe74282a41bd81b12b689a1e043
+---
+ src/gstamlhalasink_new.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/gstamlhalasink_new.c b/src/gstamlhalasink_new.c
+index 3fb9404..a6dd06a 100644
+--- a/src/gstamlhalasink_new.c
++++ b/src/gstamlhalasink_new.c
+@@ -2365,6 +2365,12 @@ static gpointer xrun_thread(gpointer para)
+         g_timer_start(priv->xrun_timer);
+         g_timer_stop(priv->xrun_timer);
+       } else {
++        if (priv->paused_) {
++          usleep(50000);
++          g_timer_start(priv->xrun_timer);
++          g_timer_stop(priv->xrun_timer);
++          continue;
++        }
+         GST_INFO_OBJECT (sink, "xrun timer triggered pause audio");
+         hal_pause (sink);
+         priv->xrun_paused = true;
+-- 
+2.25.1
+

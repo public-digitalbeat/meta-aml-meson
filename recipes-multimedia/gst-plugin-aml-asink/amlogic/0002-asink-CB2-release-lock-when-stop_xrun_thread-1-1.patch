@@ -1,0 +1,62 @@
+From 6c5fff7a1b6d6ceb10d3ec4cd1c0ec41ff6df92d Mon Sep 17 00:00:00 2001
+From: Song Zhao <song.zhao@amlogic.com>
+Date: Mon, 31 Oct 2022 21:22:32 -0700
+Subject: [PATCH 2/2] asink: CB2 release lock when stop_xrun_thread [1/1]
+
+PD#OTT-35556
+
+Problem:
+stop_xrun_thread holds sink lock, but app wants
+to get_position when receives xrun signal,
+get_position waits the sink lock, so deadlock happens.
+
+Solution:
+move stop_xrun_thread out of lock scope
+
+Verify:
+yocto
+
+Change-Id: I2a8b0c9f9517b6c3eceb29e689bfec92b1dc4715
+---
+ src/gstamlhalasink_new.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/gstamlhalasink_new.c b/src/gstamlhalasink_new.c
+index a6dd06a..5c29d99 100644
+--- a/src/gstamlhalasink_new.c
++++ b/src/gstamlhalasink_new.c
+@@ -400,6 +400,7 @@ static guint hal_commit (GstAmlHalAsink * sink, guchar * data, gint size, guint6
+ static uint32_t hal_get_latency (GstAmlHalAsink * sink);
+ static void dump(const char* path, const uint8_t *data, int size);
+ static int create_av_sync(GstAmlHalAsink *sink);
++static void stop_xrun_thread (GstAmlHalAsink * sink);
+ #if 0
+ static int get_sysfs_uint32(const char *path, uint32_t *value);
+ static int config_sys_node(const char* path, const char* value);
+@@ -1601,6 +1602,7 @@ static gboolean gst_aml_hal_asink_setcaps (GstAmlHalAsink* sink,
+   GST_DEBUG_OBJECT (sink, "release old hal");
+ 
+   /* release old ringbuffer */
++  stop_xrun_thread (sink);
+   GST_OBJECT_LOCK (sink);
+   hal_release (sink);
+   priv->flushing_ = FALSE;
+@@ -2786,6 +2788,7 @@ static void paused_to_ready(GstAmlHalAsink *sink)
+ 
+   /* make sure we unblock before calling the parent state change
+    * so it can grab the STREAM_LOCK */
++  stop_xrun_thread (sink);
+   GST_OBJECT_LOCK (sink);
+   hal_release (sink);
+   priv->quit_clock_wait = TRUE;
+@@ -3315,7 +3318,6 @@ static gboolean hal_release (GstAmlHalAsink * sink)
+   GstAmlHalAsinkPrivate *priv = sink->priv;
+   GST_INFO_OBJECT (sink, "enter");
+ 
+-  stop_xrun_thread (sink);
+   hal_stop(sink);
+   g_mutex_lock(&priv->feed_lock);
+   if (priv->stream_) {
+-- 
+2.31.0
+

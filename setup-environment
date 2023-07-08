@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+
+unset _RDK_FLAVOR
+export RDK_BSP_LAYER=meta-rdk-bsp-amlogic
+export RDK_ROOT_PATH=$(pwd -P)
+
+if [ -n "$(echo $MACHINE | grep -- lib32)" ]; then
+  NEED_A6432_SUPPORT=y
+fi
+
+if [ -d $RDK_ROOT_PATH/meta-rdk-amazon ] && [ ! -d $RDK_ROOT_PATH/meta-rdk-amazon/licenses ]; then
+  mkdir -p $RDK_ROOT_PATH/meta-rdk-amazon/licenses
+fi
+
+if [ -d $RDK_ROOT_PATH/meta-cmf ] && [ -z "$(echo $MACHINE | grep -- -rdk-broadband)" ]; then
+    # add RDK WPE targets to conf file
+    # this step has to be added before calling meta-cmf/setup-environment
+    # so that the target is displayed to the user
+    
+        cat > $RDK_ROOT_PATH/meta-rdk/conf/conf-notes.txt <<EOF
+Common targets are:
+    lib32-rdk-generic-mediaclient-image
+    lib32-rdk-generic-hybrid-image
+EOF
+    
+fi
+source meta-cmf/setup-environment $1
+if [ $? -ne 0 ]; then
+    return 1
+fi
+
+if [ -z "$_RDK_FLAVOR" ]; then
+    if [[ -z $(grep 'rdkv' conf/local.conf) ]]
+    then
+        _RDK_FLAVOR="rdkb"
+    else
+        _RDK_FLAVOR="rdkv"
+    fi
+fi
+
+if [ "${_RDK_FLAVOR}" = "rdkv" ]
+then
+    if [[ $(grep '^BBLAYERS' conf/bblayers.conf | grep -c 'meta-wpe') -eq 0 ]] && [[ -d  ../meta-wpe ]]
+    then
+        cat >> conf/bblayers.conf <<EOF
+BBLAYERS =+ "\${RDKROOT}/meta-wpe"
+EOF
+    fi
+fi
+
+
+# Add meta-rdk-bsp-amlogic only if not already present.
+if [ $(grep '^BBLAYERS' conf/bblayers.conf | grep -c 'meta-rdk-bsp-amlogic[^-]') -eq 0 ]; then
+    cat >> conf/bblayers.conf <<EOF
+BBLAYERS =+ "\${RDKROOT}/meta-rdk-bsp-amlogic"
+EOF
+fi
+
+# Add meta-aml-digitalbeat only if a machine configuration choosed from different layer
+if [ $(grep '^BBLAYERS' conf/bblayers.conf | grep -c 'meta-aml-digitalbeat[^-]') -eq 0 ]; then
+      cat >> conf/bblayers.conf <<EOF
+BBLAYERS =+ "\${RDKROOT}/meta-aml-digitalbeat"
+EOF
+fi
+
+# Add meta-amlogic only if a machine configuration choosed from different layer
+if [ $(grep '^BBLAYERS' conf/bblayers.conf | grep -c 'meta-amlogic[^-]') -eq 0 ]; then
+    cat >> conf/bblayers.conf <<EOF
+BBLAYERS =+ "\${RDKROOT}/meta-amlogic"
+EOF
+fi
+
+# Add meta-rdk-amazon only if a machine configuration choosed from different layer
+if [ -d $RDK_ROOT_PATH/meta-rdk-amazon ] && [ $(grep '^BBLAYERS' conf/bblayers.conf | grep -c 'meta-rdk-amazon[^-]') -eq 0  ]; then
+    cat >> conf/bblayers.conf <<EOF
+BBLAYERS =+ "\${RDKROOT}/meta-rdk-amazon"
+EOF
+fi
+
+# Add meta-aml-netflix only if a machine configuration choosed from different layer
+if [ -d $RDK_ROOT_PATH/meta-aml-netflix ] && [ $(grep '^BBLAYERS' conf/bblayers.conf | grep -c 'meta-aml-netflix[^-]') -eq 0  ]; then
+    cat >> conf/bblayers.conf <<EOF
+BBLAYERS =+ "\${RDKROOT}/meta-aml-netflix"
+EOF
+fi
+
+# Add meta-aml-nagra only if a machine configuration choosed from different layer
+if [ -d $RDK_ROOT_PATH/meta-aml-nagra ] && [ $(grep '^BBLAYERS' conf/bblayers.conf | grep -c 'meta-aml-nagra[^-]') -eq 0  ]; then
+    cat >> conf/bblayers.conf <<EOF
+BBLAYERS =+ "\${RDKROOT}/meta-aml-nagra"
+EOF
+fi
+
+# Add meta-aml-asperitas only if a machine configuration choosed from different layer
+if [ -d $RDK_ROOT_PATH/meta-aml-asperitas ] && [ $(grep '^BBLAYERS' conf/bblayers.conf | grep -c 'meta-aml-asperitas[^-]') -eq 0  ]; then
+    cat >> conf/bblayers.conf <<EOF
+BBLAYERS =+ "\${RDKROOT}/meta-aml-asperitas"
+EOF
+fi
+
+
+# Add meta-dvb only if a machine configuration choosed from different layer
+if [ -d $RDK_ROOT_PATH/meta-dvb ] && [ $(grep '^BBLAYERS' conf/bblayers.conf | grep -c 'meta-dvb[^-]') -eq 0  ]; then
+    cat >> conf/bblayers.conf <<EOF
+BBLAYERS =+ "\${RDKROOT}/meta-dvb"
+EOF
+fi
+
+
+
+# Add meta-openembedded/meta-initramfs only if a machine configuration choosed from different layer
+if [ $(grep '^BBLAYERS' conf/bblayers.conf | grep -c 'meta-openembedded/meta-initramfs[^-]') -eq 0 ]; then
+    cat >> conf/bblayers.conf <<EOF
+BBLAYERS =+ "\${RDKROOT}/meta-openembedded/meta-initramfs"
+EOF
+fi
+
+# Add meta-security only if not already present.
+if [ $(grep '^BBLAYERS' conf/bblayers.conf | grep -c 'meta-security[^-]') -eq 0 ]; then
+    cat >> conf/bblayers.conf <<EOF
+BBLAYERS =+ "\${RDKROOT}/meta-security"
+EOF
+fi
+
+# Add meta-perl only if not already present.
+if [ $(grep '^BBLAYERS' conf/bblayers.conf | grep -c 'meta-perl[^-]') -eq 0 ]; then
+    cat >> conf/bblayers.conf <<EOF
+BBLAYERS =+ "\${RDKROOT}/meta-openembedded/meta-perl"
+EOF
+fi
+
+
+cat >> conf/local.conf <<EOF
+LICENSE_FLAGS_WHITELIST="commercial"
+EOF
+
+if [ "${NEED_A6432_SUPPORT+set}" = "set" ]; then
+cat >> conf/local.conf <<EOF
+#Added for A6432 support
+require conf/multilib.conf
+MULTTILIBS = "multilib:lib32"
+DEFAULTTUNE_virtclass-multilib-lib32 = "armv7athf-neon"
+EOF
+fi
+
+. $RDK_ROOT_PATH/meta-amlogic/scripts/setup-environment-internal
+
+# Copy <manifest>.conf file to auto.conf for revision lock
+if [ -L $RDK_ROOT_PATH/.repo/manifest.xml ] ; then
+  MANIFEST="$(basename `readlink -f $RDK_ROOT_PATH/.repo/manifest.xml ` | cut -d '.' -f 1)"
+else
+  MANIFEST=$(grep include $RDK_ROOT_PATH/.repo/manifest.xml | cut -d '"' -f 2 | cut -d '.' -f 1)
+fi
+echo " Manifest Name = ${MANIFEST}"
+if [ -f "$RDK_ROOT_PATH/.repo/manifests/${MANIFEST}.conf" ]; then
+  cp $RDK_ROOT_PATH/.repo/manifests/${MANIFEST}.conf conf/auto.conf
+fi
+
+if [ -f "$RDK_ROOT_PATH/rdk-release-info" ]; then
+    cat $RDK_ROOT_PATH/rdk-release-info  >> conf/auto.conf
+fi
+
+if [ -e ${RDK_ROOT_PATH}/CCACHE_DIR ]; then
+# Enable ccache
+cat >> conf/local.conf << EOF
+INHERIT += "ccache"
+CCACHE_TOP_DIR = "${RDK_ROOT_PATH}/CCACHE_DIR"
+EOF
+fi

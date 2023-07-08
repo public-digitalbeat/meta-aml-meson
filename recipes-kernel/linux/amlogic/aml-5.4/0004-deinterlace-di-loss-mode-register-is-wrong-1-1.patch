@@ -1,0 +1,88 @@
+From 75c9c482bb4ab84a8534f1def0aa122f6b0dc150 Mon Sep 17 00:00:00 2001
+From: "qianqian.cai" <qianqian.cai@amlogic.com>
+Date: Thu, 25 Aug 2022 11:28:28 +0800
+Subject: [PATCH 4/4] deinterlace: di loss mode register is wrong [1/1]
+
+PD#SWPL-92201
+
+Problem:
+the parameter of init is wrong,set the wrong vlaue to register
+
+Solution:
+modify the loss setting of init value
+add dbg information at vframe dump
+
+Verify:
+t5w
+
+Change-Id: Ieaf7ef8fff7e914d6675a6c4551dc72f2bcc8b60
+Signed-off-by: qianqian.cai <qianqian.cai@amlogic.com>
+---
+ drivers/amlogic/media/di_multi/di_afbc_v3.c | 14 +++++++-------
+ drivers/amlogic/media/di_multi/di_dbg.c     |  2 ++
+ 2 files changed, 9 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/amlogic/media/di_multi/di_afbc_v3.c b/drivers/amlogic/media/di_multi/di_afbc_v3.c
+index 15cdc38ead59..04a4784f2bcc 100644
+--- a/drivers/amlogic/media/di_multi/di_afbc_v3.c
++++ b/drivers/amlogic/media/di_multi/di_afbc_v3.c
+@@ -2316,8 +2316,7 @@ static u32 enable_afbc_input(struct vframe_s *inp_vf,
+ 
+ 		if (mem_vf2 && pafd_ctr->en_set.b.mem) {
+ 			/* mem */
+-			if ((mem_vf2->type & VIDTYPE_COMPRESS_LOSS) &&
+-			    cfgg(AFBCE_LOSS_EN)) {
++			if (cfgg(AFBCE_LOSS_EN)) {
+ 				cfg.reg_lossy_en = 1;
+ 				nr_vf->type |= VIDTYPE_COMPRESS_LOSS;
+ 			} else {
+@@ -2400,8 +2399,7 @@ static u32 enable_afbc_input(struct vframe_s *inp_vf,
+ 			afbc_update_level1(chan2_vf, pafd_ctr->fb.ch2_dec);
+ 
+ 		/*nr*/
+-		if ((mem_vf2->type & VIDTYPE_COMPRESS_LOSS) &&
+-		    cfgg(AFBCE_LOSS_EN))
++		if (cfgg(AFBCE_LOSS_EN))
+ 			nr_vf->type |= VIDTYPE_COMPRESS_LOSS;
+ 		else
+ 			nr_vf->type &= ~VIDTYPE_COMPRESS_LOSS;
+@@ -4873,9 +4871,12 @@ static void ori_afbce_cfg(struct enc_cfg_s *cfg,
+ 	} else if (cfg->loosy_mode == 2) {
+ 		lossy_luma_en = 0;
+ 		lossy_chrm_en = 1;
+-	} else {
++	} else if (cfg->loosy_mode == 3) {
+ 		lossy_luma_en = 1;
+ 		lossy_chrm_en = 1;
++	} else {
++		lossy_luma_en = 0;
++		lossy_chrm_en = 0;
+ 	}
+ 
+ 	op->wr(reg[EAFBCE_MODE],
+@@ -5096,8 +5097,7 @@ static void afbce_set(struct vframe_s *vf, enum EAFBC_ENC enc)
+ 	}
+ 	#endif
+ 	vf_set_for_com(di_buf);
+-	if (cfgg(AFBCE_LOSS_EN) &&
+-	    (di_buf->vframe->type & VIDTYPE_COMPRESS_LOSS))
++	if (cfgg(AFBCE_LOSS_EN))
+ 		cfg->loosy_mode = 0x3;
+ #ifdef AFBCP
+ 	di_print("%s:buf[%d],head[0x%lx],info[0x%lx]\n",
+diff --git a/drivers/amlogic/media/di_multi/di_dbg.c b/drivers/amlogic/media/di_multi/di_dbg.c
+index 224d50924b04..f1dcff08ac4f 100644
+--- a/drivers/amlogic/media/di_multi/di_dbg.c
++++ b/drivers/amlogic/media/di_multi/di_dbg.c
+@@ -797,6 +797,8 @@ int seq_file_vframe(struct seq_file *seq, void *v, struct vframe_s *pvfm)
+ 		   (pvfm->flag & VFRAME_FLAG_DI_BYPASS) ? true : false);
+ 	seq_printf(seq, "\t%-15s:%d\n", "flag:VIDTYPE_PRE_INTERLACE",
+ 		   (pvfm->type & VIDTYPE_PRE_INTERLACE) ? true : false);
++	seq_printf(seq, "\t%-15s:%d\n", "flag:VIDTYPE_COMPRESS_LOSS",
++		   (pvfm->type & VIDTYPE_COMPRESS_LOSS) ? true : false);
+ 	seq_printf(seq, "%-15s:%d\n", "ins_id", pvfm->di_instance_id);
+ 	seq_printf(seq, "%-15s:0x%x\n", "canvas0Addr", pvfm->canvas0Addr);
+ 	seq_printf(seq, "%-15s:0x%x\n", "canvas1Addr", pvfm->canvas1Addr);
+-- 
+2.31.1
+
