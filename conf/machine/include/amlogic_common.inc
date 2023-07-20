@@ -90,4 +90,4 @@ PREFERRED_VERSION_libcobalt = "22%"
 
 # AVB is enabled by default on RDK platform, 
 # if want to disable on specific machine, DISTRO_FEATURES_remove = "AVB" in the machine config
-#DISTRO_FEATURES_append = " AVB "
+DISTRO_FEATURES_append = " AVB "
